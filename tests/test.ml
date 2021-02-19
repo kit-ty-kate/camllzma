@@ -5,7 +5,7 @@ let fmt = Printf.sprintf
 let () =
   let buf = Buffer.create 1024 in
   print_endline "Creating encoder...";
-  let e = Lzma2.encoder ~bufsize:1024 Lzma2.PRESET_DEFAULT in
+  let e = Lzma2.encoder ~bufsize:1024 Lzma2.PRESET_DEFAULT Lzma2.CHECK_CRC64 in
   print_endline "Setting inbuf...";
   Lzma2.inbuf_set e "test";
   print_endline "Clearing outbuf...";

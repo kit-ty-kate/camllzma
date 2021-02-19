@@ -101,12 +101,13 @@ value camllzma_decoder(value bufsize, value memlimit, value flags) {
     CAMLreturn(res);
 }
 
-value camllzma_encoder(value outbuf_size, value preset, value unsupported_check_exn) {
-    CAMLparam3(outbuf_size, preset, unsupported_check_exn);
+value camllzma_encoder(value outbuf_size, value preset, value check, value unsupported_check_exn) {
+    CAMLparam4(outbuf_size, preset, check, unsupported_check_exn);
     CAMLlocal1(res);
 
     const size_t bufsize = Int_val(outbuf_size);
     uint32_t lzma_preset = 0;
+    lzma_check lzma_check = 0;
 
     if (Is_long(preset)) {
         switch (Int_val(preset)) {
@@ -122,13 +123,22 @@ value camllzma_encoder(value outbuf_size, value preset, value unsupported_check_
         default:
             caml_failwith("camllzma_encoder/preset: There is a bug in camllzma. Please report.");
             break;
-
         }
+    }
+
+    switch (Int_val(check)) {
+    case 0: lzma_check = LZMA_CHECK_NONE; break;
+    case 1: lzma_check = LZMA_CHECK_CRC32; break;
+    case 2: lzma_check = LZMA_CHECK_CRC64; break;
+    case 3: lzma_check = LZMA_CHECK_SHA256; break;
+    default:
+        caml_failwith("camllzma_encoder/check: There is a bug in camllzma. Please report.");
+        break;
     }
 
     struct camllzma_stream *strm = camllzma_stream_create(outbuf_size);
 
-    switch (lzma_easy_encoder(&strm->strm, lzma_preset, LZMA_CHECK_CRC64)) {
+    switch (lzma_easy_encoder(&strm->strm, lzma_preset, lzma_check)) {
     case LZMA_OK:
         res = caml_alloc_custom(&stream_ops, sizeof(lzma_stream*), 0, 1);
         LZMA_Stream_val(res) = strm;

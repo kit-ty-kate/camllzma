@@ -17,8 +17,14 @@ type preset =
   | PRESET_CUSTOM of int
   | PRESET_EXTREME of int
 
-external encoder : int -> preset -> exn -> stream = "camllzma_encoder"
-let encoder ~bufsize preset = encoder bufsize preset UNSUPPORTED_CHECK
+type check =
+  | CHECK_NONE
+  | CHECK_CRC32
+  | CHECK_CRC64
+  | CHECK_SHA256
+
+external encoder : int -> preset -> check -> exn -> stream = "camllzma_encoder"
+let encoder ~bufsize preset check = encoder bufsize preset check UNSUPPORTED_CHECK
 
 type res =
   | OK

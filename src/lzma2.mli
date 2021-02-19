@@ -16,7 +16,13 @@ type preset =
   | PRESET_CUSTOM of int
   | PRESET_EXTREME of int
 
-val encoder : bufsize:int -> preset -> stream
+type check =
+  | CHECK_NONE
+  | CHECK_CRC32
+  | CHECK_CRC64
+  | CHECK_SHA256
+
+val encoder : bufsize:int -> preset -> check -> stream
 
 type res =
   | OK
