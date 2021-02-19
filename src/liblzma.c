@@ -5,10 +5,12 @@
 #include <caml/memory.h>
 #include <caml/fail.h>
 #include <caml/custom.h>
+#include <string.h>
 #include <lzma.h>
 
 struct camllzma_stream {
     lzma_stream strm;
+    uint8_t *inbuf;
     uint8_t *outbuf;
     size_t outbuf_size;
 };
@@ -20,6 +22,9 @@ static void camllzma_stream_finalize(value stream) {
 
     struct camllzma_stream *strm = LZMA_Stream_val(stream);
     lzma_end(&strm->strm);
+    if (strm->inbuf != NULL) {
+        free(strm->inbuf);
+    }
     free(strm->outbuf);
     free(strm);
 }
@@ -32,6 +37,7 @@ static struct camllzma_stream *camllzma_stream_create(size_t bufsize) {
         caml_raise_out_of_memory();
     }
     strm->strm = tmp;
+    strm->inbuf = NULL;
     strm->outbuf = outbuf;
     strm->outbuf_size = bufsize;
 
@@ -159,8 +165,19 @@ value camllzma_inbuf_set(value stream, value str) {
     CAMLparam2(stream, str);
 
     struct camllzma_stream *strm = LZMA_Stream_val(stream);
-    strm->strm.next_in = String_val(str);
-    strm->strm.avail_in = caml_string_length(str);
+    const size_t avail_in = caml_string_length(str);
+    uint8_t *next_in = malloc(avail_in * sizeof(uint8_t));
+
+    if (next_in == NULL) {
+        caml_raise_out_of_memory();
+    }
+    if (strm->inbuf != NULL) {
+        free(strm->inbuf);
+    }
+
+    strm->inbuf = next_in;
+    strm->strm.next_in = memcpy(next_in, &Byte(str, 0), avail_in);
+    strm->strm.avail_in = avail_in;
 
     CAMLreturn(Val_unit);
 }
