@@ -128,7 +128,7 @@ value camllzma_encoder(value outbuf_size, value preset, value unsupported_check_
 
     struct camllzma_stream *strm = camllzma_stream_create(outbuf_size);
 
-    switch (lzma_easy_encoder(&strm->strm, preset, LZMA_CHECK_CRC64)) {
+    switch (lzma_easy_encoder(&strm->strm, lzma_preset, LZMA_CHECK_CRC64)) {
     case LZMA_OK:
         res = caml_alloc_custom(&stream_ops, sizeof(lzma_stream*), 0, 1);
         LZMA_Stream_val(res) = strm;
