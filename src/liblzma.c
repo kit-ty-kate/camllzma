@@ -56,7 +56,7 @@ static struct custom_operations stream_ops = {
 };
 
 value camllzma_decoder(value bufsize, value memlimit, value flags) {
-    CAMLparam2(memlimit, flags);
+    CAMLparam3(bufsize, memlimit, flags);
     CAMLlocal1(res);
 
     const size_t outbuf_size = Int_val(bufsize);
@@ -102,7 +102,7 @@ value camllzma_decoder(value bufsize, value memlimit, value flags) {
 }
 
 value camllzma_encoder(value outbuf_size, value preset, value unsupported_check_exn) {
-    CAMLparam2(preset, unsupported_check_exn);
+    CAMLparam3(outbuf_size, preset, unsupported_check_exn);
     CAMLlocal1(res);
 
     const size_t bufsize = Int_val(outbuf_size);
