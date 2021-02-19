@@ -1,0 +1,7 @@
+(library
+ (public_name camllzma)
+ (c_library_flags -llzma) ; TODO: Use dune-configurator
+ (foreign_stubs
+  (language c)
+  (names liblzma)
+  (flags (:standard)))) ; TODO: Use dune-configurator
