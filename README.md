@@ -13,6 +13,7 @@ $ opam install camllzma
 - Dune >= 2.7
 - Dune-configurator >= 2.7
 - libLZMA >= 5.1.4
+- pkg-config
 
 ## Usage
 

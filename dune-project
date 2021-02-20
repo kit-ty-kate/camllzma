@@ -18,4 +18,5 @@
   (ocaml (>= 4.08))
   dune
   (dune-configurator (and :build (>= 2.7)))
+  (conf-pkg-config :build)
   (conf-liblzma :build)))
