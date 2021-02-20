@@ -16,4 +16,6 @@
  (tags (compression xz lzma))
  (depends
   (ocaml (>= 4.02))
+  dune
+  (dune-configurator :build)
   (conf-liblzma :build)))

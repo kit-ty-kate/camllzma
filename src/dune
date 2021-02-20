@@ -1,7 +1,7 @@
 (library
  (public_name camllzma)
- (c_library_flags -llzma) ; TODO: Use dune-configurator
+ (c_library_flags (:include config/libs.sexp))
  (foreign_stubs
   (language c)
   (names liblzma)
-  (flags (:standard)))) ; TODO: Use dune-configurator
+  (flags (:standard (:include config/cflags.sexp)))))
