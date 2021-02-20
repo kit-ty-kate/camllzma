@@ -15,7 +15,7 @@
  (synopsis "Bindings for libLZMA")
  (tags (compression xz lzma))
  (depends
-  (ocaml (>= 4.02))
+  (ocaml (>= 4.08))
   dune
-  (dune-configurator :build)
+  (dune-configurator (and :build (>= 2.7)))
   (conf-liblzma :build)))

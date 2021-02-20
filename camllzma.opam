@@ -9,9 +9,9 @@ tags: ["compression" "xz" "lzma"]
 homepage: "https://github.com/kit-ty-kate/camllzma"
 bug-reports: "https://github.com/kit-ty-kate/camllzma/issues"
 depends: [
-  "ocaml" {>= "4.02"}
+  "ocaml" {>= "4.08"}
   "dune" {>= "2.7"}
-  "dune-configurator" {build}
+  "dune-configurator" {build & >= "2.7"}
   "conf-liblzma" {build}
   "odoc" {with-doc}
 ]
