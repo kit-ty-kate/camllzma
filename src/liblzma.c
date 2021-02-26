@@ -209,8 +209,7 @@ value camllzma_outbuf(value stream) {
     const struct camllzma_stream *strm = LZMA_Stream_val(stream);
     const size_t len = strm->outbuf_size - strm->strm.avail_out;
 
-    str = caml_alloc_string(len);
-    memcpy(&Byte(str, 0), strm->outbuf, len);
+    str = caml_alloc_initialized_string(len, strm->outbuf);
 
     CAMLreturn(str);
 }
