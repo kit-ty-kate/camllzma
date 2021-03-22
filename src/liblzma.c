@@ -11,35 +11,43 @@
 struct camllzma_stream {
     lzma_stream strm;
     uint8_t *inbuf;
+    size_t inbuf_size;
     uint8_t *outbuf;
     size_t outbuf_size;
+    lzma_ret last_res;
 };
 
+#define DEFAULT_BUF_SIZE 4096
 #define LZMA_Stream_val(v) (*((struct camllzma_stream **) Data_custom_val(v)))
 
 static void camllzma_stream_finalize(value stream) {
-    CAMLparam1(stream);
-
     struct camllzma_stream *strm = LZMA_Stream_val(stream);
     lzma_end(&strm->strm);
-    if (strm->inbuf != NULL) {
-        free(strm->inbuf);
-    }
+    free(strm->inbuf);
     free(strm->outbuf);
     free(strm);
 }
 
-static struct camllzma_stream *camllzma_stream_create(size_t bufsize) {
+static struct camllzma_stream *camllzma_stream_create(void) {
     struct camllzma_stream *strm = malloc(sizeof(struct camllzma_stream));
-    uint8_t *outbuf = malloc(bufsize * sizeof(uint8_t));
+    uint8_t *outbuf = malloc(DEFAULT_BUF_SIZE * sizeof(uint8_t));
+    uint8_t *inbuf = malloc(DEFAULT_BUF_SIZE * sizeof(uint8_t));
     lzma_stream tmp = LZMA_STREAM_INIT;
-    if (strm == NULL || outbuf == NULL) {
+    if (strm == NULL || outbuf == NULL || inbuf == NULL) {
         caml_raise_out_of_memory();
     }
     strm->strm = tmp;
-    strm->inbuf = NULL;
+    strm->last_res = LZMA_OK;
+
+    strm->inbuf = inbuf;
+    strm->inbuf_size = DEFAULT_BUF_SIZE;
+    strm->strm.next_in = inbuf;
+    strm->strm.avail_in = 0;
+
     strm->outbuf = outbuf;
-    strm->outbuf_size = bufsize;
+    strm->outbuf_size = DEFAULT_BUF_SIZE;
+    strm->strm.next_out = outbuf;
+    strm->strm.avail_out = DEFAULT_BUF_SIZE;
 
     return strm;
 }
@@ -55,11 +63,10 @@ static struct custom_operations stream_ops = {
   custom_fixed_length_default
 };
 
-value camllzma_decoder(value bufsize, value memlimit, value flags) {
-    CAMLparam3(bufsize, memlimit, flags);
+value camllzma_new_decoder(value memlimit, value flags) {
+    CAMLparam2(memlimit, flags);
     CAMLlocal1(res);
 
-    const size_t outbuf_size = Int_val(bufsize);
     const uint64_t lzma_memlimit = Int64_val(memlimit);
     uint32_t lzma_flags = 0;
 
@@ -77,7 +84,7 @@ value camllzma_decoder(value bufsize, value memlimit, value flags) {
         flags = Field(flags, 1);
     }
 
-    struct camllzma_stream *strm = camllzma_stream_create(outbuf_size);
+    struct camllzma_stream *strm = camllzma_stream_create();
 
     switch (lzma_stream_decoder(&strm->strm, lzma_memlimit, lzma_flags)) {
     case LZMA_OK:
@@ -101,11 +108,10 @@ value camllzma_decoder(value bufsize, value memlimit, value flags) {
     CAMLreturn(res);
 }
 
-value camllzma_encoder(value outbuf_size, value preset, value check, value unsupported_check_exn) {
-    CAMLparam4(outbuf_size, preset, check, unsupported_check_exn);
+value camllzma_new_encoder(value preset, value check, value unsupported_check_exn) {
+    CAMLparam3(preset, check, unsupported_check_exn);
     CAMLlocal1(res);
 
-    const size_t bufsize = Int_val(outbuf_size);
     uint32_t lzma_preset = 0;
     lzma_check lzma_check = 0;
 
@@ -136,7 +142,7 @@ value camllzma_encoder(value outbuf_size, value preset, value check, value unsup
         break;
     }
 
-    struct camllzma_stream *strm = camllzma_stream_create(outbuf_size);
+    struct camllzma_stream *strm = camllzma_stream_create();
 
     switch (lzma_easy_encoder(&strm->strm, lzma_preset, lzma_check)) {
     case LZMA_OK:
@@ -163,53 +169,51 @@ value camllzma_encoder(value outbuf_size, value preset, value check, value unsup
     CAMLreturn(res);
 }
 
-value camllzma_inbuf_is_empty(value stream) {
-    CAMLparam1(stream);
-
-    const struct camllzma_stream *strm = LZMA_Stream_val(stream);
-
-    CAMLreturn(Val_bool(strm->strm.avail_in == 0));
-}
-
-value camllzma_inbuf_set(value stream, value str) {
+value camllzma_push(value stream, value str) {
     CAMLparam2(stream, str);
 
     struct camllzma_stream *strm = LZMA_Stream_val(stream);
-    const size_t avail_in = caml_string_length(str);
-    uint8_t *next_in = malloc(avail_in * sizeof(uint8_t));
+    const size_t len = caml_string_length(str);
+    uint8_t *next_in = strm->inbuf;
+    const size_t old_len = strm->strm.avail_in;
+    const size_t avail_in = len + old_len;
 
-    if (next_in == NULL) {
-        caml_raise_out_of_memory();
-    }
-    if (strm->inbuf != NULL) {
-        free(strm->inbuf);
+    if (avail_in > strm->inbuf_size || next_in == NULL) {
+        next_in = malloc(avail_in * sizeof(uint8_t));
+
+        if (next_in == NULL) {
+            caml_raise_out_of_memory();
+        }
+        if (strm->inbuf != NULL) {
+            free(strm->inbuf);
+        }
+
+        memcpy(next_in, strm->strm.next_in, old_len);
+        strm->inbuf = next_in;
+        strm->inbuf_size = avail_in;
     }
 
-    strm->inbuf = next_in;
-    strm->strm.next_in = memcpy(next_in, &Byte(str, 0), avail_in);
+    strm->strm.next_in = memcpy(next_in + old_len, &Byte(str, 0), len);
     strm->strm.avail_in = avail_in;
 
     CAMLreturn(Val_unit);
 }
 
-value camllzma_outbuf_clear(value stream) {
-    CAMLparam1(stream);
-
-    struct camllzma_stream *strm = LZMA_Stream_val(stream);
-    strm->strm.next_out = strm->outbuf;
-    strm->strm.avail_out = strm->outbuf_size;
-
-    CAMLreturn(Val_unit);
-}
-
-value camllzma_outbuf(value stream) {
+value camllzma_pop(value stream) {
     CAMLparam1(stream);
     CAMLlocal1(str);
 
-    const struct camllzma_stream *strm = LZMA_Stream_val(stream);
+    struct camllzma_stream *strm = LZMA_Stream_val(stream);
     const size_t len = strm->outbuf_size - strm->strm.avail_out;
 
-    str = caml_alloc_initialized_string(len, strm->outbuf);
+    if(strm->strm.avail_out == 0 || strm->last_res == LZMA_STREAM_END) {
+        str = caml_alloc_initialized_string(len, strm->outbuf);
+        strm->strm.next_out = strm->outbuf;
+        strm->strm.avail_out = strm->outbuf_size;
+        strm->last_res = LZMA_OK;
+    } else {
+        str = caml_alloc_initialized_string(0, "");
+    }
 
     CAMLreturn(str);
 }
@@ -232,15 +236,33 @@ value camllzma_next(value stream, value action, value unsupported_check_exn) {
         break;
     }
 
-    switch (lzma_code(&strm->strm, act)) {
-    case LZMA_OK: res = caml_alloc(1, 0); Store_field(res, 0, Val_int(0)); break;
-    case LZMA_STREAM_END: res = caml_alloc(1, 0); Store_field(res, 0, Val_int(1)); break;
-    case LZMA_GET_CHECK: res = caml_alloc(1, 0); Store_field(res, 0, Val_int(2)); break;
-    case LZMA_NO_CHECK: res = caml_alloc(1, 1); Store_field(res, 0, Val_int(0)); break;
-    case LZMA_MEMLIMIT_ERROR: res = caml_alloc(1, 1); Store_field(res, 0, Val_int(1)); break;
-    case LZMA_FORMAT_ERROR: res = caml_alloc(1, 1); Store_field(res, 0, Val_int(2)); break;
-    case LZMA_DATA_ERROR: res = caml_alloc(1, 1); Store_field(res, 0, Val_int(3)); break;
-    case LZMA_BUF_ERROR: res = caml_alloc(1, 1); Store_field(res, 0, Val_int(4)); break;
+    switch ((strm->last_res = lzma_code(&strm->strm, act))) {
+    case LZMA_OK: res = caml_hash_variant("OK"); break;
+    case LZMA_STREAM_END: res = caml_hash_variant("STREAM_END"); break;
+    case LZMA_GET_CHECK:
+        res = caml_alloc(2, 0);
+        Store_field(res, 0, caml_hash_variant("GET_CHECK"));
+        switch (lzma_get_check(&strm->strm)) {
+        case LZMA_CHECK_NONE: Store_field(res, 1, Val_int(0)); break;
+        case LZMA_CHECK_CRC32: Store_field(res, 1, Val_int(1)); break;
+        case LZMA_CHECK_CRC64: Store_field(res, 1, Val_int(2)); break;
+        case LZMA_CHECK_SHA256: Store_field(res, 1, Val_int(3)); break;
+        default:
+            caml_failwith("camllzma_next/GET_CHECK: There is a bug in camllzma. Please report.");
+            break;
+        }
+        break;
+    case LZMA_NO_CHECK: res = caml_hash_variant("NO_CHECK"); break;
+    case LZMA_MEMLIMIT_ERROR: res = caml_hash_variant("MEMLIMIT_ERROR"); break;
+    case LZMA_FORMAT_ERROR: res = caml_hash_variant("FORMAT_ERROR"); break;
+    case LZMA_DATA_ERROR: res = caml_hash_variant("CORRUPT_DATA"); break;
+    case LZMA_BUF_ERROR:
+        if (strm->strm.avail_in == 0) {
+            res = caml_hash_variant("INPUT_NEEDED");
+        } else {
+            res = caml_hash_variant("OUTPUT_BUFFER_TOO_SMALL");
+        }
+        break;
     case LZMA_UNSUPPORTED_CHECK:
         caml_raise(unsupported_check_exn);
         break;
